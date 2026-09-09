@@ -5414,6 +5414,12 @@ color: #9eafc3;
   .title-screen h1 {
     margin-bottom: 18px !important;
   }
+
+  /* スマホでも「最初の11人を確認しよう」を1行で表示 */
+  .reveal-header h1 {
+    font-size: 26px !important;
+    white-space: nowrap !important;
+  }
 }
 
 
