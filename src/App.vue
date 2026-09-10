@@ -787,14 +787,7 @@
             :key="slot.id"
             class="post-player"
           >
-            <img
-              v-if="getPlayerImage(lineup[slot.id])"
-              :src="getPlayerImage(lineup[slot.id])"
-              :alt="lineup[slot.id]?.name"
-              class="post-player-image"
-            />
-            <div v-else class="post-player-fallback">⚽</div>
-            <span>{{ lineup[slot.id]?.name }}</span>
+            <span class="post-player-name">{{ lineup[slot.id]?.name }}</span>
           </div>
 
         </div>
@@ -936,6 +929,13 @@
         </button>
       </div>
 
+      <button
+        class="detail-close-button"
+        @click="selectedPost = null; clearPostUrl()"
+      >
+        閉じる
+      </button>
+
     </div>
 
     <div v-else class="post-list-content">
@@ -979,8 +979,7 @@
       <div
         v-for="post in sortedPosts"
         :key="post.id"
-        class="post-item clickable-post"
-        @click="openPost(post)"
+        class="post-item"
       >
 
         <div class="post-item-header">
@@ -1011,7 +1010,11 @@
         </div>
 
 
-        <div class="mini-pitch">
+        <div
+          class="mini-pitch"
+          @click.stop="openPost(post)"
+          title="フォーメーションをタップして詳細を見る"
+        >
 
           <div
             v-for="(player, index) in post.players"
@@ -1019,13 +1022,7 @@
             class="mini-player"
             :style="getPostPlayerStyle(player, post.formation, index)"
           >
-            <img
-              v-if="getPlayerImage(player)"
-              :src="getPlayerImage(player)"
-              :alt="player.name"
-              class="mini-player-image"
-            />
-            <div v-else class="mini-player-fallback">⚽</div>
+            <span>{{ player.name }}</span>
           </div>
 
         </div>
@@ -1104,7 +1101,7 @@ const GAME_SETTINGS = {
 
 INITIAL_MONEY: 100,
 
-MAX_TURNS: 15,
+MAX_TURNS: 10,
 
 INITIAL_TEAM: {
   GK: 1,
@@ -1236,12 +1233,12 @@ const players = ref([
 {
   name: "クルトワ",
   position: "GK",
-  price: 75
+  price: 70
 },
 {
   name: "ルニン",
   position: "GK",
-  price: 25
+  price: 30
 },
 {
   name: "ケパ",
@@ -1253,37 +1250,37 @@ const players = ref([
 {
   name: "ナチョ",
   position: "DF",
-  price: 35
+  price: 30
 },
 {
   name: "リュディガー",
   position: "DF",
-  price: 50
+  price: 45
 },
 {
   name: "ミリトン",
   position: "DF",
-  price: 70
+  price: 60
 },
 {
   name: "アラバ",
   position: "DF",
-  price: 65
+  price: 55
 },
 {
   name: "ハイセン",
   position: "DF",
-  price: 60
+  price: 50
 },
 {
   name: "コナテ",
   position: "DF",
-  price: 60
+  price: 40
 },
 {
   name: "アセンシオ",
   position: "DF",
-  price: 40
+  price: 35
 },
 {
   name: "バスケス",
@@ -1293,12 +1290,12 @@ const players = ref([
 {
   name: "カルバハル",
   position: "DF",
-  price: 65
+  price: 60
 },
 {
   name: "トレント",
   position: "DF",
-  price: 60
+  price: 55
 },
 {
   name: "ドゥンフリース",
@@ -1313,7 +1310,7 @@ const players = ref([
 {
   name: "メンディ",
   position: "DF",
-  price: 55
+  price: 45
 },
 {
   name: "カレーラス",
@@ -1340,7 +1337,7 @@ const players = ref([
 {
   name: "カマヴィンガ",
   position: "MF",
-  price: 60
+  price: 70
 },
 {
   name: "チュアメニ",
@@ -1355,17 +1352,17 @@ const players = ref([
 {
   name: "ベリンガム",
   position: "MF",
-  price: 180
+  price: 160
 },
 {
   name: "セバージョス",
   position: "MF",
-  price: 30
+  price: 35
 },
 {
   name: "ギュレル",
   position: "MF",
-  price: 55
+  price: 60
 },
 {
   name: "ピタルチ",
@@ -1382,12 +1379,12 @@ const players = ref([
 {
   name: "ヴィニシウス",
   position: "FW",
-  price: 150
+  price: 140
 },
 {
   name: "ロドリゴ",
   position: "FW",
-  price: 90
+  price: 75
 },
 {
   name: "エンバペ",
@@ -1417,7 +1414,7 @@ const players = ref([
 {
   name: "ゴンサロ",
   position: "FW",
-  price: 30
+  price: 25
 },
 {
   name: "ディオマンデ",
@@ -4000,6 +3997,40 @@ font-size: 11px;
 white-space: nowrap;
 }
 
+/* 投稿一覧：選手画像は使わず、名前を白い楕円で表示 */
+.mini-player {
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  padding: 5px 10px !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+  box-shadow: 0 2px 7px rgba(0,0,0,0.18);
+  cursor: pointer;
+}
+
+.mini-pitch {
+  cursor: pointer;
+}
+
+.post-player-name {
+  display: inline-block;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #111827;
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+
 .post-item-info {
 display: flex;
 align-items: center;
@@ -4139,6 +4170,19 @@ color: #9eafc3;
   font-weight: 800;
   cursor: pointer;
 }
+
+.detail-close-button {
+  display: block;
+  margin: 16px auto 0;
+  padding: 12px 34px;
+  border: 1px solid #53657d;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0b1726;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 
 /* =========================
  初期選手公開
@@ -5208,6 +5252,28 @@ color: #9eafc3;
   
   .placed-player span {
     display: none !important;
+  }
+}
+
+/* =========================================================
+   POST LIST - MOBILE NAME PILLS
+========================================================= */
+@media (max-width: 700px) {
+  .mini-player {
+    width: auto !important;
+    height: auto !important;
+    padding: 4px 8px !important;
+    font-size: 10px !important;
+  }
+
+  .mini-player-image,
+  .mini-player-fallback {
+    display: none !important;
+  }
+
+  .post-player-name {
+    font-size: 12px;
+    padding: 6px 10px;
   }
 }
 
