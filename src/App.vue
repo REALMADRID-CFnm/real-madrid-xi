@@ -18,50 +18,6 @@
     </div>
     <button class="admin-refresh-button" @click="fetchAdminStats">🔄 統計を更新</button>
 
-    <div class="admin-name-request-management">
-      <h2>リクエスト申請</h2>
-      <p>ユーザーから届いた名前変更リクエストを確認できます。</p>
-
-      <div v-if="loadingNameChangeRequests" class="admin-name-request-loading">
-        リクエストを読み込んでいます...
-      </div>
-
-      <div v-else-if="nameChangeRequests.length === 0" class="admin-no-name-requests">
-        現在、未処理のリクエストはありません。
-      </div>
-
-      <div v-else class="admin-name-request-list">
-        <div
-          v-for="request in nameChangeRequests"
-          :key="`name-request-${request.id}`"
-          class="admin-name-request-item"
-        >
-          <div class="admin-name-request-info">
-            <strong>{{ request.user_id }}</strong>
-            <span>→ {{ request.requested_name }}</span>
-            <small>{{ formatDate(request.updated_at || request.created_at) }}</small>
-          </div>
-
-          <div class="admin-name-request-actions">
-            <button
-              class="admin-approve-name-button"
-              :disabled="processingNameChangeId === request.id"
-              @click="processNameChangeRequest(request, true)"
-            >
-              {{ processingNameChangeId === request.id ? "処理中..." : "承認" }}
-            </button>
-            <button
-              class="admin-reject-name-button"
-              :disabled="processingNameChangeId === request.id"
-              @click="processNameChangeRequest(request, false)"
-            >
-              非承認
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div class="admin-post-management">
       <h2>投稿管理</h2>
       <p>すべてのユーザーの投稿を管理者権限で削除できます。</p>
@@ -205,10 +161,6 @@
 
     <button class="ranking-title-button" @click="openRanking">
       🏆 いいねランキング TOP10
-    </button>
-
-    <button class="name-change-title-button" @click="openNameChangeModal">
-      ✏️ ユーザーID（名前）を変更
     </button>
 
     <button class="admin-title-button" @click="openAdmin">
@@ -1134,40 +1086,6 @@
   </div>
 
 </div>
-
-  <!-- =========================
-       ユーザーID（名前）変更リクエスト
-  ========================== -->
-  <div v-if="showNameChangeModal" class="name-change-overlay" @click.self="closeNameChangeModal">
-    <div class="name-change-modal">
-      <h2>ユーザーID（名前）を変更</h2>
-      <p>変更後の名前を入力してください</p>
-
-      <input
-        v-model="nameChangeInput"
-        class="name-change-input"
-        type="text"
-        maxlength="20"
-        placeholder="変更後の名前"
-        @keyup.enter="submitNameChangeRequest"
-      />
-
-      <small class="name-change-note">1〜20文字まで入力できます。日本語も使用できます。</small>
-
-      <div class="name-change-buttons">
-        <button class="name-change-cancel" @click="closeNameChangeModal">
-          キャンセル
-        </button>
-        <button
-          class="name-change-submit"
-          :disabled="isSubmittingNameChange"
-          @click="submitNameChangeRequest"
-        >
-          {{ isSubmittingNameChange ? "送信中..." : "送信" }}
-        </button>
-      </div>
-    </div>
-  </div>
 </template>
 
 
@@ -1278,17 +1196,6 @@ const adminPosts = ref([])
 const loadingAdminPosts = ref(false)
 const deletingAllPosts = ref(false)
 const deletingPostId = ref(null)
-
-// ========================================
-// ユーザーID（名前）変更リクエスト
-// ========================================
-
-const showNameChangeModal = ref(false)
-const nameChangeInput = ref("")
-const isSubmittingNameChange = ref(false)
-const nameChangeRequests = ref([])
-const loadingNameChangeRequests = ref(false)
-const processingNameChangeId = ref(null)
 
 // ========================================
 // 初期選手の公開演出
@@ -2000,8 +1907,6 @@ return [...pool]
 
 async function startGame() {
 
-  await syncApprovedNameChange()
-
   if (revealTimer) {
     clearInterval(revealTimer)
     revealTimer = null
@@ -2455,8 +2360,6 @@ ref(null)
 
 async function postTeam() {
 
-await syncApprovedNameChange()
-
 if (!isTeamComplete.value) {
   return
 }
@@ -2809,120 +2712,6 @@ return new Date(date)
 
 
 // ========================================
-// ユーザーID（名前）変更リクエスト
-// ========================================
-
-function openNameChangeModal() {
-  nameChangeInput.value = ""
-  showNameChangeModal.value = true
-}
-
-function closeNameChangeModal() {
-  if (isSubmittingNameChange.value) {
-    return
-  }
-  showNameChangeModal.value = false
-  nameChangeInput.value = ""
-}
-
-function normalizeRequestedName(value) {
-  return String(value || "").trim()
-}
-
-async function submitNameChangeRequest() {
-  if (isSubmittingNameChange.value) {
-    return
-  }
-
-  const requestedName = normalizeRequestedName(nameChangeInput.value)
-
-  if (!requestedName) {
-    alert("変更後の名前を入力してください。")
-    return
-  }
-
-  if (requestedName.length > 20) {
-    alert("名前は20文字以内で入力してください。")
-    return
-  }
-
-  if (requestedName === userId.value) {
-    alert("現在と同じ名前です。")
-    return
-  }
-
-  isSubmittingNameChange.value = true
-
-  try {
-    // 同じユーザーのリクエストは1件だけ保持し、最新の内容で上書きする
-    const { error } = await supabase
-      .from("name_change_requests")
-      .upsert(
-        {
-          user_id: userId.value,
-          requested_name: requestedName,
-          status: "pending",
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: "user_id" }
-      )
-
-    if (error) {
-      throw error
-    }
-
-    showNameChangeModal.value = false
-    nameChangeInput.value = ""
-    alert("名前変更リクエストを送信しました！\n承認されるまで現在の名前が表示されます。")
-  } catch (error) {
-    console.error("名前変更リクエスト送信エラー:", error)
-    alert("リクエストの送信に失敗しました。\n" + error.message)
-  } finally {
-    isSubmittingNameChange.value = false
-  }
-}
-
-async function syncApprovedNameChange() {
-  try {
-    const { data, error } = await supabase
-      .from("name_change_requests")
-      .select("id, user_id, requested_name, status, updated_at")
-      .eq("user_id", userId.value)
-      .eq("status", "approved")
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (error) {
-      console.error("承認済み名前変更の確認エラー:", error)
-      return
-    }
-
-    if (data && data.requested_name && data.requested_name !== userId.value) {
-      const oldUserId = userId.value
-      userId.value = data.requested_name
-      localStorage.setItem("bestXI_userId", userId.value)
-
-      // いいね済み情報も新しいユーザーIDに引き継ぐ
-      try {
-        const oldLikedKey = `bestXI_likedPosts_${oldUserId}`
-        const newLikedKey = `bestXI_likedPosts_${userId.value}`
-        if (!localStorage.getItem(newLikedKey)) {
-          const oldLiked = localStorage.getItem(oldLikedKey)
-          if (oldLiked) {
-            localStorage.setItem(newLikedKey, oldLiked)
-          }
-        }
-      } catch {}
-
-      likedPostIds.value = loadLikedPostIds()
-    }
-  } catch (error) {
-    console.error("承認済み名前変更の同期エラー:", error)
-  }
-}
-
-// ========================================
 // 管理者用画面
 // ========================================
 
@@ -2943,132 +2732,10 @@ async function openAdmin() {
   showAdmin.value = true
   gameStarted.value = false
   await fetchAdminStats()
-  await fetchAdminNameChangeRequests()
   await fetchAdminPosts()
 }
 
 function closeAdmin() { showAdmin.value = false }
-
-async function fetchAdminNameChangeRequests() {
-  loadingNameChangeRequests.value = true
-
-  try {
-    const { data, error } = await supabase
-      .from("name_change_requests")
-      .select("id, user_id, requested_name, status, created_at, updated_at")
-      .eq("status", "pending")
-      .order("updated_at", { ascending: false })
-
-    if (error) {
-      throw error
-    }
-
-    nameChangeRequests.value = data || []
-  } catch (error) {
-    console.error("名前変更リクエスト取得エラー:", error)
-    alert("名前変更リクエストの取得に失敗しました。\n" + error.message)
-  } finally {
-    loadingNameChangeRequests.value = false
-  }
-}
-
-async function processNameChangeRequest(request, approved) {
-  if (!showAdmin.value || !request || processingNameChangeId.value !== null) {
-    return
-  }
-
-  processingNameChangeId.value = request.id
-
-  try {
-    if (!approved) {
-      const { error } = await supabase
-        .from("name_change_requests")
-        .update({ status: "rejected", updated_at: new Date().toISOString() })
-        .eq("id", request.id)
-        .eq("status", "pending")
-
-      if (error) throw error
-
-      nameChangeRequests.value = nameChangeRequests.value.filter(
-        item => String(item.id) !== String(request.id)
-      )
-
-      alert("名前変更リクエストを非承認にしました。")
-      return
-    }
-
-    const requestedName = normalizeRequestedName(request.requested_name)
-
-    if (!requestedName || requestedName.length > 20) {
-      alert("このリクエストの名前が不正です。")
-      return
-    }
-
-    // 既に別ユーザーが使用している名前は承認しない
-    const { data: existingPosts, error: existingError } = await supabase
-      .from("posts")
-      .select("user_id")
-      .eq("user_id", requestedName)
-      .limit(1)
-
-    if (existingError) throw existingError
-
-    if ((existingPosts || []).length > 0 && requestedName !== request.user_id) {
-      alert("その名前はすでに使用されています。別の名前にしてください。")
-      return
-    }
-
-    const { data: otherRequests, error: requestNameError } = await supabase
-      .from("name_change_requests")
-      .select("user_id")
-      .eq("requested_name", requestedName)
-      .neq("id", request.id)
-      .eq("status", "pending")
-      .limit(1)
-
-    if (requestNameError) throw requestNameError
-
-    if ((otherRequests || []).length > 0) {
-      alert("その名前への変更を希望している別のリクエストがあります。先に確認してください。")
-      return
-    }
-
-    const oldUserId = request.user_id
-
-    // 既存投稿とプレイ履歴も新しいユーザーIDに更新
-    const { error: postsError } = await supabase
-      .from("posts")
-      .update({ user_id: requestedName })
-      .eq("user_id", oldUserId)
-    if (postsError) throw postsError
-
-    const { error: playsError } = await supabase
-      .from("game_plays")
-      .update({ user_id: requestedName })
-      .eq("user_id", oldUserId)
-    if (playsError) throw playsError
-
-    const { error: approveError } = await supabase
-      .from("name_change_requests")
-      .update({ status: "approved", updated_at: new Date().toISOString() })
-      .eq("id", request.id)
-      .eq("status", "pending")
-    if (approveError) throw approveError
-
-    nameChangeRequests.value = nameChangeRequests.value.filter(
-      item => String(item.id) !== String(request.id)
-    )
-
-    await fetchAdminStats()
-    await fetchAdminPosts()
-    alert(`名前変更を承認しました。\n${oldUserId} → ${requestedName}`)
-  } catch (error) {
-    console.error("名前変更リクエスト処理エラー:", error)
-    alert("リクエストの処理に失敗しました。\n" + error.message)
-  } finally {
-    processingNameChangeId.value = null
-  }
-}
 
 async function fetchAdminPosts() {
   loadingAdminPosts.value = true
@@ -3514,7 +3181,6 @@ currentFormation.value =
 }
 
 onMounted(async () => {
-  await syncApprovedNameChange()
   await loadCardImages()
   await loadPostFromUrl()
 })
@@ -5756,8 +5422,7 @@ color: #9eafc3;
 }
 
 .title-screen .posts-title-button,
-.title-screen .ranking-title-button,
-.title-screen .name-change-title-button {
+.title-screen .ranking-title-button {
   width: min(310px, 82vw) !important;
   box-sizing: border-box;
 }
@@ -5833,8 +5498,7 @@ color: #9eafc3;
 
 /* Keep title list buttons identical */
 .title-screen .posts-title-button,
-.title-screen .ranking-title-button,
-.title-screen .name-change-title-button {
+.title-screen .ranking-title-button {
   margin: 12px auto 0 !important;
   padding: 12px 25px !important;
   border: 1px solid #e8bfd2 !important;
@@ -5846,209 +5510,13 @@ color: #9eafc3;
 }
 
 .title-screen .posts-title-button:hover,
-.title-screen .ranking-title-button:hover,
-.title-screen .name-change-title-button:hover {
+.title-screen .ranking-title-button:hover {
   border-color: #ff69b4 !important;
   color: #d93f8c !important;
   background: #fff7fb !important;
 }
 
 
-
-/* =========================================================
-   ユーザーID変更リクエスト
-========================================================= */
-.name-change-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: rgba(20, 12, 18, 0.48);
-}
-
-.name-change-modal {
-  width: min(440px, 100%);
-  padding: 28px 24px 24px;
-  border: 1px solid #efd5e1;
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 18px 50px rgba(50, 25, 40, 0.2);
-  text-align: center;
-}
-
-.name-change-modal h2 {
-  margin: 0 0 8px;
-  color: #302932;
-}
-
-.name-change-modal p {
-  margin: 0 0 18px;
-  color: #817983;
-  font-size: 14px;
-}
-
-.name-change-input {
-  width: 100%;
-  padding: 13px 14px;
-  border: 1px solid #e8bfd2;
-  border-radius: 10px;
-  outline: none;
-  background: #fffafd;
-  color: #302932;
-  font-size: 16px;
-  box-sizing: border-box;
-}
-
-.name-change-input:focus {
-  border-color: #ff69b4;
-  box-shadow: 0 0 0 3px rgba(255,105,180,0.12);
-}
-
-.name-change-note {
-  display: block;
-  margin-top: 8px;
-  color: #99919a;
-  font-size: 11px;
-}
-
-.name-change-buttons {
-  display: flex;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.name-change-buttons button {
-  flex: 1;
-  padding: 12px 16px;
-  border-radius: 10px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.name-change-cancel {
-  border: 1px solid #e8bfd2;
-  background: #fff;
-  color: #4a424a;
-}
-
-.name-change-submit {
-  border: 1px solid #ff69b4;
-  background: #ff69b4;
-  color: #fff;
-}
-
-.name-change-submit:disabled {
-  opacity: .65;
-  cursor: default;
-}
-
-/* =========================================================
-   ADMIN - 名前変更リクエスト
-========================================================= */
-.admin-name-request-management {
-  width: min(760px, 100%);
-  margin: 24px auto 0;
-  padding: 22px;
-  border: 1px solid #efd5e1;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 10px 28px rgba(90,45,65,0.07);
-  text-align: center;
-}
-
-.admin-name-request-management h2 {
-  margin: 0 0 7px;
-  color: #302932;
-}
-
-.admin-name-request-management p {
-  margin: 0 0 16px;
-  color: #817983;
-  font-size: 13px;
-}
-
-.admin-name-request-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.admin-name-request-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px;
-  border: 1px solid #f0dce6;
-  border-radius: 12px;
-  background: #fffafd;
-}
-
-.admin-name-request-info {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  text-align: left;
-}
-
-.admin-name-request-info strong {
-  color: #302932;
-}
-
-.admin-name-request-info span {
-  color: #df4793;
-  font-weight: 800;
-}
-
-.admin-name-request-info small {
-  width: 100%;
-  color: #99919a;
-  font-size: 11px;
-}
-
-.admin-name-request-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.admin-name-request-actions button {
-  min-width: 74px;
-  padding: 9px 12px;
-  border-radius: 9px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.admin-approve-name-button {
-  border: 1px solid #ff69b4;
-  background: #ff69b4;
-  color: #fff;
-}
-
-.admin-reject-name-button {
-  border: 1px solid #e8bfd2;
-  background: #fff;
-  color: #5e5660;
-}
-
-.admin-name-request-actions button:disabled {
-  opacity: .6;
-  cursor: default;
-}
-
-.admin-name-request-loading,
-.admin-no-name-requests {
-  padding: 20px;
-  border: 1px solid #eadde4;
-  border-radius: 12px;
-  color: #817983;
-  background: #fffafd;
-}
 
 /* =========================================================
    ADMIN - 全投稿削除
@@ -6195,23 +5663,4 @@ color: #9eafc3;
   }
 }
 
-
-@media (max-width: 600px) {
-  .admin-name-request-item {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .admin-name-request-actions {
-    width: 100%;
-  }
-
-  .admin-name-request-actions button {
-    flex: 1;
-  }
-
-  .name-change-modal {
-    padding: 24px 18px 20px;
-  }
-}
 </style>
