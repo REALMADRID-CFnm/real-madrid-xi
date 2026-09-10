@@ -787,7 +787,14 @@
             :key="slot.id"
             class="post-player"
           >
-            <span class="post-player-name">{{ lineup[slot.id]?.name }}</span>
+            <img
+              v-if="getPlayerImage(lineup[slot.id])"
+              :src="getPlayerImage(lineup[slot.id])"
+              :alt="lineup[slot.id]?.name"
+              class="post-player-image"
+            />
+            <div v-else class="post-player-fallback">⚽</div>
+            <span>{{ lineup[slot.id]?.name }}</span>
           </div>
 
         </div>
