@@ -1943,16 +1943,40 @@ initialReveal.value = true
 
 }
 
-function revealNextPlayer() {
+async function preloadPlayerImages(team) {
+  const imageUrls = team
+    .map(player => getPlayerImage(player))
+    .filter(Boolean)
+
+  await Promise.all(
+    imageUrls.map(url => new Promise(resolve => {
+      const img = new Image()
+      img.onload = resolve
+      img.onerror = resolve
+      img.src = url
+    }))
+  )
+}
+
+async function revealNextPlayer() {
 
   if (!initialReveal.value || revealStarted.value) {
+    return
+  }
+
+  // 最初の11枚だけ先に読み込む。
+  // これでカード表示時の画像読み込みによるカクつきを防ぎ、
+  // 公開アニメーションを確実に見せる。
+  await preloadPlayerImages(revealedPlayers.value)
+
+  if (!initialReveal.value) {
     return
   }
 
   revealStarted.value = true
   revealIndex.value = 0
 
-  // 最初の1人を表示したあと、自動で順番に公開する
+  // 最初の1人を表示したあと自動で順番に公開する
   revealTimer = setInterval(() => {
     if (!initialReveal.value) {
       clearInterval(revealTimer)
@@ -4175,6 +4199,7 @@ color: #9eafc3;
   position: relative;
   width: 220px;
   height: 300px;
+  will-change: transform, opacity;
   overflow: hidden;
   display: flex;
   flex-direction: column;
