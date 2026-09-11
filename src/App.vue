@@ -1440,8 +1440,6 @@ const players = ref([
 // カード画像
 // ========================================
 
-const CARD_BUCKET = "player-cards"
-
 const CARD_FILES = {
   "クルトワ": "01.jpg",
   "ルニン": "02.jpg",
@@ -1483,19 +1481,19 @@ const CARD_FILES = {
   "エスピ": "38.jpg"
 }
 
-const CARD_BASE_URL =
-  "https://xiqfsqqyztofrtzkbowo.supabase.co/storage/v1/object/public/player-cards"
+const CARD_BASE_URL = "/cards"
 
 const CARD_IMAGES = Object.fromEntries(
   Object.entries(CARD_FILES).map(([name, file]) => [
-    name,
-    `${CARD_BASE_URL}/${file}`
+    name, `${CARD_BASE_URL}/${file}`
   ])
 )
 
-// ゲーム開始前にカード画像を準備しておく
-const cardImagesReady = ref(false)
-let cardImagesLoadPromise = null
+// カード画像はSupabase Storageではなく、Vercel/StackBlitzの
+// public/cards フォルダから直接読み込む。
+// これによりカード画像のSupabase送信帯域幅を使わない。
+const cardImagesReady = ref(true)
+let cardImagesLoadPromise = Promise.resolve()
 
 function getPlayerImage(player) {
   return player?.image || CARD_IMAGES[player?.name] || ""
@@ -1506,58 +1504,9 @@ players.value = players.value.map(player => ({
   image: CARD_IMAGES[player.name] || ""
 }))
 
-// StackBlitzのプレビュー環境で外部画像がimgタグから
-// 正しく表示されない場合に備えて、画像を一度Blobとして取得し、
-// ブラウザ内のURLに変換してから使用する。
+// ローカル配信なので追加の画像ダウンロード処理は不要。
 async function loadCardImages() {
-  // 同時に何度も読み込まない
-  if (cardImagesLoadPromise) {
-    return cardImagesLoadPromise
-  }
-
-  cardImagesLoadPromise = (async () => {
-    await Promise.all(
-      Object.entries(CARD_IMAGES).map(async ([name, url]) => {
-        try {
-          const response = await fetch(url, {
-            mode: "cors",
-            cache: "force-cache"
-          })
-
-          if (!response.ok) {
-            throw new Error(`画像取得失敗: ${response.status}`)
-          }
-
-          const blob = await response.blob()
-
-          if (!blob.type.startsWith("image/")) {
-            throw new Error(`画像ではないレスポンス: ${blob.type}`)
-          }
-
-          const localUrl = URL.createObjectURL(blob)
-          CARD_IMAGES[name] = localUrl
-
-          players.value = players.value.map(player =>
-            player.name === name ? { ...player, image: localUrl } : player
-          )
-
-          myPlayers.value = myPlayers.value.map(player =>
-            player.name === name ? { ...player, image: localUrl } : player
-          )
-
-          candidates.value = candidates.value.map(player =>
-            player.name === name ? { ...player, image: localUrl } : player
-          )
-        } catch (error) {
-          console.error(`カード画像の読み込みに失敗しました: ${name}`, error)
-        }
-      })
-    )
-
-    // 読み込みが終わったらゲーム開始ボタンを有効化
-    cardImagesReady.value = true
-  })()
-
+  cardImagesReady.value = true
   return cardImagesLoadPromise
 }
 
