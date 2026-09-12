@@ -2735,23 +2735,56 @@ async function fetchAdminPosts() {
 async function fetchAdminStats() {
   loadingAdmin.value = true
   try {
-    const { data: playRows, error: playError } = await supabase
+    // 総プレイ回数は全行を取得せず、Supabase側で件数だけ数える。
+    const { count: totalPlays, error: playCountError } = await supabase
       .from("game_plays")
-      .select("user_id, created_at")
-    if (playError) throw playError
+      .select("id", { count: "exact", head: true })
+    if (playCountError) throw playCountError
+
+    // 今日のプレイ回数も、今日の分だけSupabase側で件数を数える。
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const { count: dailyPlays, error: dailyPlayError } = await supabase
+      .from("game_plays")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", todayStart.toISOString())
+    if (dailyPlayError) throw dailyPlayError
+
+    // 総ユーザー数はuser_idだけを1000件ずつ取得して重複を除く。
+    // これならgame_playsが1000件を超えても正しく集計できる。
+    const uniqueUserIds = new Set()
+    const pageSize = 1000
+    let from = 0
+
+    while (true) {
+      const { data: userRows, error: userError } = await supabase
+        .from("game_plays")
+        .select("user_id")
+        .not("user_id", "is", null)
+        .range(from, from + pageSize - 1)
+
+      if (userError) throw userError
+
+      const rows = userRows || []
+      rows.forEach(row => {
+        if (row.user_id) uniqueUserIds.add(row.user_id)
+      })
+
+      if (rows.length < pageSize) break
+      from += pageSize
+    }
 
     const { count: totalPosts, error: postError } = await supabase
       .from("posts")
       .select("id", { count: "exact", head: true })
     if (postError) throw postError
 
-    const rows = playRows || []
-    const totalUsers = new Set(rows.map(row => row.user_id).filter(Boolean)).size
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    const dailyPlays = rows.filter(row => row.created_at && new Date(row.created_at) >= todayStart).length
-
-    adminStats.value = { totalUsers, totalPlays: rows.length, totalPosts: totalPosts || 0, dailyPlays }
+    adminStats.value = {
+      totalUsers: uniqueUserIds.size,
+      totalPlays: totalPlays || 0,
+      totalPosts: totalPosts || 0,
+      dailyPlays: dailyPlays || 0
+    }
   } catch (error) {
     console.error("管理者統計の取得エラー:", error)
     alert("統計データの取得に失敗しました。\n" + error.message)
